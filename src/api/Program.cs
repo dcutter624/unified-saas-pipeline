@@ -5,8 +5,19 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseInMemoryDatabase("UnifiedSaasPipeline"));
+
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+        policy.SetIsOriginAllowed(IsAllowedOrigin)
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+});
 
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -15,6 +26,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 var app = builder.Build();
 
+app.UseCors();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await SeedDatabaseAsync(db);
+}
+
 app.MapGet("/", () => "Unified SaaS Pipeline API");
 
 app.MapPost("/api/seed", async (AppDbContext db) =>
@@ -22,6 +41,61 @@ app.MapPost("/api/seed", async (AppDbContext db) =>
     if (await db.Tenants.AnyAsync())
     {
         return Results.Ok(new { message = "Database already seeded." });
+    }
+
+    await SeedDatabaseAsync(db);
+
+    var tenant = await db.Tenants.FirstAsync();
+    var customer = await db.Customers.FirstAsync();
+    var subscription = await db.Subscriptions.FirstAsync();
+
+    return Results.Created("/api/tenants", new
+    {
+        TenantId = tenant.Id,
+        TenantName = tenant.Name,
+        CustomerId = customer.Id,
+        CustomerName = customer.Name,
+        SubscriptionId = subscription.Id,
+        subscription.Status,
+        subscription.Tier
+    });
+});
+
+app.MapGet("/api/tenants", async (AppDbContext db) =>
+{
+    var tenants = await db.Tenants
+        .Include(t => t.Customers)
+        .Include(t => t.Subscriptions)
+        .ToListAsync();
+
+    return Results.Ok(tenants);
+});
+
+app.Run();
+
+static bool IsAllowedOrigin(string origin)
+{
+    if (origin == "http://localhost:5173")
+    {
+        return true;
+    }
+
+    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+    {
+        return false;
+    }
+
+    return uri.Host.EndsWith(".onrender.com", StringComparison.OrdinalIgnoreCase)
+        || uri.Host.Equals("onrender.com", StringComparison.OrdinalIgnoreCase)
+        || uri.Host.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase)
+        || uri.Host.Equals("vercel.app", StringComparison.OrdinalIgnoreCase);
+}
+
+static async Task SeedDatabaseAsync(AppDbContext db)
+{
+    if (await db.Tenants.AnyAsync())
+    {
+        return;
     }
 
     var tenant = new Tenant
@@ -56,27 +130,4 @@ app.MapPost("/api/seed", async (AppDbContext db) =>
     db.Customers.Add(customer);
     db.Subscriptions.Add(subscription);
     await db.SaveChangesAsync();
-
-    return Results.Created("/api/tenants", new
-    {
-        TenantId = tenant.Id,
-        TenantName = tenant.Name,
-        CustomerId = customer.Id,
-        CustomerName = customer.Name,
-        SubscriptionId = subscription.Id,
-        subscription.Status,
-        subscription.Tier
-    });
-});
-
-app.MapGet("/api/tenants", async (AppDbContext db) =>
-{
-    var tenants = await db.Tenants
-        .Include(t => t.Customers)
-        .Include(t => t.Subscriptions)
-        .ToListAsync();
-
-    return Results.Ok(tenants);
-});
-
-app.Run();
+}
