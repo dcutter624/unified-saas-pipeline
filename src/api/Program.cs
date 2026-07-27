@@ -73,6 +73,7 @@ app.MapGet("/api/tenants", async (AppDbContext db) =>
 {
     var tenants = await db.Tenants
         .Include(t => t.Customers)
+        .Include(t => t.Subscriptions)
         .ToListAsync();
 
     return Results.Ok(tenants);
