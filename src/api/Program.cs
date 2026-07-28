@@ -14,7 +14,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
-        policy.SetIsOriginAllowed(IsAllowedOrigin)
+        policy.AllowAnyOrigin()
             .AllowAnyHeader()
             .AllowAnyMethod());
 });
@@ -61,7 +61,12 @@ app.MapPost("/api/seed", async (AppDbContext db) =>
     });
 });
 
-app.MapGet("/api/tenants", async (AppDbContext db) =>
+app.MapGet("/api/tenants", GetTenantsAsync);
+app.MapGet("/tenants", GetTenantsAsync);
+
+app.Run();
+
+static async Task<IResult> GetTenantsAsync(AppDbContext db)
 {
     var tenants = await db.Tenants
         .Include(t => t.Customers)
@@ -69,26 +74,6 @@ app.MapGet("/api/tenants", async (AppDbContext db) =>
         .ToListAsync();
 
     return Results.Ok(tenants);
-});
-
-app.Run();
-
-static bool IsAllowedOrigin(string origin)
-{
-    if (origin == "http://localhost:5173")
-    {
-        return true;
-    }
-
-    if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-    {
-        return false;
-    }
-
-    return uri.Host.EndsWith(".onrender.com", StringComparison.OrdinalIgnoreCase)
-        || uri.Host.Equals("onrender.com", StringComparison.OrdinalIgnoreCase)
-        || uri.Host.EndsWith(".vercel.app", StringComparison.OrdinalIgnoreCase)
-        || uri.Host.Equals("vercel.app", StringComparison.OrdinalIgnoreCase);
 }
 
 static async Task SeedDatabaseAsync(AppDbContext db)
