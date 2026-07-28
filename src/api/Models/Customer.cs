@@ -1,6 +1,6 @@
 namespace Api.Models;
 
-public class Customer
+public class Customer : ITenantScoped
 {
     public Guid Id { get; set; }
 

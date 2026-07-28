@@ -1,6 +1,6 @@
 namespace Api.Models;
 
-public class Subscription
+public class Subscription : ITenantScoped
 {
     public Guid Id { get; set; }
 

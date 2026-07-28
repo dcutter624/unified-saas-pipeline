@@ -1,0 +1,42 @@
+@baseUrl = http://localhost:5000
+
+### Login — valid credentials (seeded admin / password)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "password"
+}
+
+### Login — invalid credentials (expect 401)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "wrong-password"
+}
+
+### Protected tenants — WITHOUT Bearer token (expect 401 Unauthorized)
+GET {{baseUrl}}/api/tenants
+
+### Protected dashboard — WITHOUT Bearer token (expect 401 Unauthorized)
+GET {{baseUrl}}/api/dashboard
+
+### Protected tenants — WITH Bearer token (expect 200, tenant-isolated data)
+GET {{baseUrl}}/api/tenants
+Authorization: Bearer {{login.response.body.$.token}}
+
+### Protected dashboard — WITH Bearer token (expect 200)
+GET {{baseUrl}}/api/dashboard
+Authorization: Bearer {{login.response.body.$.token}}
+
+### Protected metrics — WITH Bearer token (expect 200)
+GET {{baseUrl}}/api/metrics
+Authorization: Bearer {{login.response.body.$.token}}
+
+### Protected data — WITH Bearer token (expect 200, customers for current tenant only)
+GET {{baseUrl}}/api/data
+Authorization: Bearer {{login.response.body.$.token}}

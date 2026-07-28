@@ -13,4 +13,6 @@ public class Tenant
     public ICollection<Customer> Customers { get; set; } = new List<Customer>();
 
     public ICollection<Subscription> Subscriptions { get; set; } = new List<Subscription>();
+
+    public ICollection<User> Users { get; set; } = new List<User>();
 }
