@@ -8,6 +8,16 @@ public class Tenant
 
     public string Slug { get; set; } = string.Empty;
 
+    public string Status { get; set; } = TenantStatuses.Active;
+
+    public string? PrimaryColor { get; set; }
+
+    public string? LogoUrl { get; set; }
+
+    public bool IsDeleted { get; set; }
+
+    public DateTime? DeletedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Customer> Customers { get; set; } = new List<Customer>();

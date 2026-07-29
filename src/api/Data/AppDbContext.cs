@@ -36,8 +36,10 @@ public class AppDbContext : DbContext
             entity.HasKey(t => t.Id);
             entity.Property(t => t.Name).IsRequired();
             entity.Property(t => t.Slug).IsRequired();
+            entity.Property(t => t.Status).IsRequired();
             entity.HasIndex(t => t.Slug).IsUnique();
-            entity.HasQueryFilter(t => CurrentTenantId == Guid.Empty || t.Id == CurrentTenantId);
+            entity.HasQueryFilter(t =>
+                !t.IsDeleted && (CurrentTenantId == Guid.Empty || t.Id == CurrentTenantId));
         });
 
         modelBuilder.Entity<Customer>(entity =>
@@ -77,28 +79,66 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(u => u.Id);
             entity.Property(u => u.Username).IsRequired();
+            entity.Property(u => u.Email).IsRequired();
             entity.Property(u => u.PasswordHash).IsRequired();
+            entity.Property(u => u.Role).IsRequired();
             entity.HasIndex(u => u.Username).IsUnique();
+            entity.HasIndex(u => u.Email).IsUnique();
 
             entity.HasOne(u => u.Tenant)
                 .WithMany(t => t.Users)
                 .HasForeignKey(u => u.TenantId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasQueryFilter(u => u.TenantId == CurrentTenantId);
+            entity.HasQueryFilter(u => !u.IsDeleted && u.TenantId == CurrentTenantId);
         });
     }
 
     public override int SaveChanges()
     {
+        ApplySoftDeletes();
         ApplyTenantIdOnInsert();
         return base.SaveChanges();
     }
 
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        ApplySoftDeletes();
         ApplyTenantIdOnInsert();
         return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ApplySoftDeletes()
+    {
+        var utcNow = DateTime.UtcNow;
+
+        foreach (var entry in ChangeTracker.Entries<Tenant>())
+        {
+            if (entry.State != EntityState.Deleted)
+            {
+                continue;
+            }
+
+            entry.State = EntityState.Modified;
+            entry.Entity.IsDeleted = true;
+            entry.Entity.DeletedAt = utcNow;
+            if (!TenantStatuses.IsDisabled(entry.Entity.Status))
+            {
+                entry.Entity.Status = TenantStatuses.Inactive;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<User>())
+        {
+            if (entry.State != EntityState.Deleted)
+            {
+                continue;
+            }
+
+            entry.State = EntityState.Modified;
+            entry.Entity.IsDeleted = true;
+            entry.Entity.DeletedAt = utcNow;
+        }
     }
 
     private void ApplyTenantIdOnInsert()

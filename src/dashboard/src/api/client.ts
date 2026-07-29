@@ -1,8 +1,8 @@
-import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import axios from 'axios'
 import { API_BASE_URL } from '../config'
 import { clearAuthStorage, getStoredToken } from '../auth/tokenStorage'
 
-export type UnauthorizedHandler = () => void
+export type UnauthorizedHandler = (message?: string) => void
 
 let unauthorizedHandler: UnauthorizedHandler | null = null
 
@@ -23,7 +23,7 @@ export const apiClient = axios.create({
   },
 })
 
-apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+apiClient.interceptors.request.use((config) => {
   const token = getStoredToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -33,14 +33,29 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  (error) => {
+    if (!axios.isAxiosError(error)) {
+      return Promise.reject(error)
+    }
+
     const status = error.response?.status
     const skipRedirect = error.config?.skipAuthRedirect === true
-    const isLoginRequest = error.config?.url?.includes('/api/auth/login')
+    const url = error.config?.url ?? ''
+    const isAuthRequest = url.includes('/api/auth/login') || url.includes('/api/auth/register')
+    const apiMessage = (error.response?.data as { message?: string } | undefined)?.message
 
-    if (status === 401 && !skipRedirect && !isLoginRequest) {
+    const isDisabledTenant =
+      status === 403 &&
+      typeof apiMessage === 'string' &&
+      apiMessage.toLowerCase().includes('tenant account is disabled')
+
+    if (!skipRedirect && !isAuthRequest && (status === 401 || isDisabledTenant)) {
       clearAuthStorage()
-      unauthorizedHandler?.()
+      unauthorizedHandler?.(
+        isDisabledTenant
+          ? apiMessage
+          : 'Your session expired. Please sign in again.',
+      )
     }
 
     return Promise.reject(error)

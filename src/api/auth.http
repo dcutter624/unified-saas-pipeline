@@ -1,5 +1,42 @@
 @baseUrl = http://localhost:5000
 
+### Register new tenant (Day 2) — expect 201 with token + tenantId
+# @name register
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "tenantName": "Initech",
+  "adminUsername": "initech-admin",
+  "adminEmail": "admin@initech.example",
+  "adminPassword": "ChangeMe123!"
+}
+
+### Register duplicate username/email — expect 400
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "tenantName": "Initech Clone",
+  "adminUsername": "initech-admin",
+  "adminEmail": "other@initech.example",
+  "adminPassword": "ChangeMe123!"
+}
+
+### Login as newly registered tenant admin
+# @name registerLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "initech-admin",
+  "password": "ChangeMe123!"
+}
+
+### Dashboard for registered tenant (Bearer from register)
+GET {{baseUrl}}/api/dashboard
+Authorization: Bearer {{register.response.body.$.token}}
+
 ### Login — valid credentials (seeded admin / password)
 # @name login
 POST {{baseUrl}}/api/auth/login

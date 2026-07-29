@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link as RouterLink, Navigate, useNavigate } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -8,19 +8,18 @@ import {
   CardContent,
   CircularProgress,
   Container,
+  Link,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
-import axios from 'axios'
-import { loginRequest } from '../api/dashboardApi'
-import { useAuth } from '../auth/AuthContext'
+import { getApiErrorMessage, useAuth } from '../auth/AuthContext'
 
 export default function LoginPage() {
-  const { isAuthenticated, login } = useAuth()
+  const { isAuthenticated, login, authNotice, clearAuthNotice } = useAuth()
   const navigate = useNavigate()
 
-  const [username, setUsername] = useState('admin')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({})
@@ -45,6 +44,7 @@ export default function LoginPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
+    clearAuthNotice()
 
     if (!validate()) {
       return
@@ -52,25 +52,10 @@ export default function LoginPage() {
 
     setSubmitting(true)
     try {
-      const data = await loginRequest(username.trim(), password)
-      if (!data.token || !data.tenantId) {
-        throw new Error('Login response was missing token or tenantId.')
-      }
-
-      login(data.token, data.tenantId)
+      await login(username.trim(), password)
       navigate('/', { replace: true })
     } catch (err) {
-      if (axios.isAxiosError(err)) {
-        if (err.response?.status === 401) {
-          setError('Invalid username or password.')
-        } else if (!err.response) {
-          setError('Unable to reach the API. Confirm the backend is running.')
-        } else {
-          setError(`Login failed (${err.response.status}).`)
-        }
-      } else {
-        setError(err instanceof Error ? err.message : 'Login failed.')
-      }
+      setError(getApiErrorMessage(err, 'Login failed'))
     } finally {
       setSubmitting(false)
     }
@@ -89,9 +74,16 @@ export default function LoginPage() {
             </Typography>
           </Stack>
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
+          {(authNotice || error) && (
+            <Alert
+              severity="error"
+              sx={{ mb: 2 }}
+              onClose={() => {
+                setError(null)
+                clearAuthNotice()
+              }}
+            >
+              {error ?? authNotice}
             </Alert>
           )}
 
@@ -131,6 +123,12 @@ export default function LoginPage() {
               >
                 {submitting ? 'Signing in…' : 'Sign in'}
               </Button>
+              <Typography variant="body2" color="text.secondary" textAlign="center">
+                New tenant?{' '}
+                <Link component={RouterLink} to="/register">
+                  Register
+                </Link>
+              </Typography>
             </Stack>
           </Box>
         </CardContent>

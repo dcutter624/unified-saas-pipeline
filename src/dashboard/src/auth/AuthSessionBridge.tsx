@@ -3,22 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import { setUnauthorizedHandler } from '../api/client'
 import { useAuth } from './AuthContext'
 
-/**
- * Bridges Axios 401 handling to auth logout + login redirect.
- * Must render inside BrowserRouter and AuthProvider.
- */
 export default function AuthSessionBridge() {
-  const { logout } = useAuth()
+  const { logout, setAuthNotice } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
-    setUnauthorizedHandler(() => {
+    setUnauthorizedHandler((message) => {
       logout()
+      setAuthNotice(message ?? 'Your session expired. Please sign in again.')
       navigate('/login', { replace: true })
     })
 
     return () => setUnauthorizedHandler(null)
-  }, [logout, navigate])
+  }, [logout, navigate, setAuthNotice])
 
   return null
 }

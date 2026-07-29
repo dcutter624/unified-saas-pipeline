@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
 using Api.Models;
 using Microsoft.IdentityModel.Tokens;
@@ -21,12 +20,21 @@ public class JwtTokenService(IConfiguration configuration)
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
+        var role = string.IsNullOrWhiteSpace(user.Role) ? UserRoles.User : user.Role;
+
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Name, user.Username),
-            new("tenant_id", user.TenantId.ToString())
+            new(ClaimTypes.Role, role),
+            new("tenant_id", user.TenantId.ToString()),
+            new("role", role)
         };
+
+        if (!string.IsNullOrWhiteSpace(user.Email))
+        {
+            claims.Add(new Claim(ClaimTypes.Email, user.Email));
+        }
 
         var token = new JwtSecurityToken(
             issuer: issuer,
@@ -37,13 +45,4 @@ public class JwtTokenService(IConfiguration configuration)
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
-
-    public static string HashPassword(string password)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(password));
-        return Convert.ToHexString(bytes);
-    }
-
-    public static bool VerifyPassword(string password, string passwordHash) =>
-        string.Equals(HashPassword(password), passwordHash, StringComparison.OrdinalIgnoreCase);
 }

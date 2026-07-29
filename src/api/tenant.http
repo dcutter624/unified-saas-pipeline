@@ -1,0 +1,146 @@
+@baseUrl = http://localhost:5000
+
+### Login as seeded Admin (Acme)
+# @name adminLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "password"
+}
+
+### GET tenant settings (Admin) — expect 200
+GET {{baseUrl}}/api/tenant/settings
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### PUT tenant settings (Admin) — update name + branding
+# @name updateSettings
+PUT {{baseUrl}}/api/tenant/settings
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "tenantName": "Acme Corporation",
+  "primaryColor": "#0B5FFF",
+  "logoUrl": "https://cdn.example.com/acme-logo.svg",
+  "status": "Active"
+}
+
+### GET tenant users (Admin) — expect seeded admin listed
+GET {{baseUrl}}/api/tenant/users
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### POST create secondary tenant user (Admin) — expect 201
+# @name createUser
+POST {{baseUrl}}/api/tenant/users
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "username": "acme-analyst",
+  "email": "analyst@acme.com",
+  "password": "Analyst123!",
+  "role": "User"
+}
+
+### POST duplicate user — expect 400
+POST {{baseUrl}}/api/tenant/users
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "username": "acme-analyst",
+  "email": "other@acme.com",
+  "password": "Analyst123!",
+  "role": "User"
+}
+
+### Login as secondary User (non-Admin)
+# @name userLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "acme-analyst",
+  "password": "Analyst123!"
+}
+
+### Non-Admin accessing settings — expect 403 Forbidden
+GET {{baseUrl}}/api/tenant/settings
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### Non-Admin creating users — expect 403 Forbidden
+POST {{baseUrl}}/api/tenant/users
+Authorization: Bearer {{userLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "username": "should-fail",
+  "email": "fail@acme.com",
+  "password": "Nope123!",
+  "role": "User"
+}
+
+### Unauthorized (no token) — expect 401
+GET {{baseUrl}}/api/tenant/settings
+
+### Register a second tenant then confirm isolation
+# @name registerOther
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "tenantName": "Globex",
+  "adminUsername": "globex-admin",
+  "adminEmail": "admin@globex.example",
+  "adminPassword": "Globex123!"
+}
+
+### Globex admin sees only Globex settings (not Acme)
+GET {{baseUrl}}/api/tenant/settings
+Authorization: Bearer {{registerOther.response.body.$.token}}
+
+### --- Day 2 Step 3: Tenant lifecycle ---
+
+### PATCH deactivate tenant (Admin) — expect 200 Inactive
+# @name deactivateTenant
+PATCH {{baseUrl}}/api/tenant/status
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "status": "Inactive"
+}
+
+### Dashboard while Inactive — expect 403 disabled message
+GET {{baseUrl}}/api/dashboard
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### Settings while Inactive — expect 403 disabled message
+GET {{baseUrl}}/api/tenant/settings
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### Login still works while Inactive (returns token + warning message)
+# @name inactiveLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "password"
+}
+
+### PATCH reactivate tenant — expect 200 Active
+# @name reactivateTenant
+PATCH {{baseUrl}}/api/tenant/status
+Authorization: Bearer {{inactiveLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "status": "Active"
+}
+
+### Dashboard after reactivation — expect 200
+GET {{baseUrl}}/api/dashboard
+Authorization: Bearer {{inactiveLogin.response.body.$.token}}
