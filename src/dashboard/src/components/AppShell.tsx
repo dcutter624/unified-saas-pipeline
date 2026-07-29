@@ -3,13 +3,14 @@ import {
   AppBar,
   Avatar,
   Box,
+  Button,
   IconButton,
   Menu,
   MenuItem,
   Toolbar,
   Typography,
 } from '@mui/material'
-import { useNavigate } from 'react-router-dom'
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 
 interface AppShellProps {
@@ -19,10 +20,12 @@ interface AppShellProps {
 export default function AppShell({ children }: AppShellProps) {
   const { tenantSettings, currentUser, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
 
   const title = tenantSettings?.tenantName || 'Unified SaaS Dashboard'
   const initial = (currentUser?.username || title).charAt(0).toUpperCase()
+  const isAdmin = currentUser?.role === 'Admin'
 
   function handleLogout() {
     setAnchorEl(null)
@@ -45,6 +48,44 @@ export default function AppShell({ children }: AppShellProps) {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             {title}
           </Typography>
+          <Button
+            color="inherit"
+            component={RouterLink}
+            to="/"
+            sx={{
+              opacity: location.pathname === '/' ? 1 : 0.8,
+              textDecoration: location.pathname === '/' ? 'underline' : 'none',
+              textUnderlineOffset: 6,
+            }}
+          >
+            Overview
+          </Button>
+          <Button
+            color="inherit"
+            component={RouterLink}
+            to="/analytics"
+            sx={{
+              opacity: location.pathname.startsWith('/analytics') ? 1 : 0.8,
+              textDecoration: location.pathname.startsWith('/analytics') ? 'underline' : 'none',
+              textUnderlineOffset: 6,
+            }}
+          >
+            Analytics
+          </Button>
+          {isAdmin && (
+            <Button
+              color="inherit"
+              component={RouterLink}
+              to="/audit"
+              sx={{
+                opacity: location.pathname.startsWith('/audit') ? 1 : 0.8,
+                textDecoration: location.pathname.startsWith('/audit') ? 'underline' : 'none',
+                textUnderlineOffset: 6,
+              }}
+            >
+              Audit Trail
+            </Button>
+          )}
           {currentUser && (
             <Typography
               variant="body2"

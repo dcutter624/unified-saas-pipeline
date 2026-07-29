@@ -41,7 +41,7 @@ export async function loginRequest(username: string, password: string): Promise<
   const { data } = await apiClient.post<LoginResponse>(
     '/api/auth/login',
     { username, password },
-    { skipAuthRedirect: true },
+    { skipAuthRedirect: true, skipErrorToast: true },
   )
   return data
 }
@@ -51,6 +51,7 @@ export async function registerTenantRequest(
 ): Promise<RegisterResponse> {
   const { data } = await apiClient.post<RegisterResponse>('/api/auth/register', payload, {
     skipAuthRedirect: true,
+    skipErrorToast: true,
   })
   return data
 }
@@ -97,12 +98,16 @@ export async function createCustomerRequest(payload: {
   email: string
   tier?: string
 }): Promise<void> {
-  await apiClient.post('/api/data', payload)
+  await apiClient.post('/api/data', payload, { skipErrorToast: true })
 }
 
 export async function updateSubscriptionStatusRequest(
   subscriptionId: string,
   status: string,
 ): Promise<void> {
-  await apiClient.patch(`/api/subscriptions/${subscriptionId}/status`, { status })
+  await apiClient.patch(
+    `/api/subscriptions/${subscriptionId}/status`,
+    { status },
+    { skipErrorToast: true },
+  )
 }

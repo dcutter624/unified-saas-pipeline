@@ -38,10 +38,22 @@ export function sanitizeApiBaseUrl(raw: string | undefined): string {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       return DEFAULT_API_BASE_URL
     }
+
+    // Block accidental relative / self-host resolution in production builds.
+    if (import.meta.env.PROD && url.hostname === 'localhost') {
+      return DEFAULT_API_BASE_URL
+    }
+
     return `${url.protocol}//${url.host}`
   } catch {
     return DEFAULT_API_BASE_URL
   }
 }
 
+export const IS_PRODUCTION = import.meta.env.PROD
 export const API_BASE_URL = sanitizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL)
+
+if (import.meta.env.DEV) {
+  // Helps catch misconfigured local .env values early.
+  console.info(`[config] API_BASE_URL=${API_BASE_URL}`)
+}

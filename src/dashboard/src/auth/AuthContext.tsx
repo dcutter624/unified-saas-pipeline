@@ -210,8 +210,17 @@ export function getApiErrorMessage(err: unknown, fallback: string): string {
     if (err.response?.status === 401) {
       return 'Invalid username or password.'
     }
+    if (err.response?.status === 403) {
+      return 'You do not have permission to perform this action.'
+    }
+    if (err.code === 'ECONNABORTED') {
+      return 'The API request timed out. The server may still be warming up — please try again.'
+    }
     if (!err.response) {
-      return 'Unable to reach the API. Confirm the backend is running.'
+      return 'Unable to reach the API. The server may be starting up — please retry in a moment.'
+    }
+    if (err.response.status >= 500) {
+      return 'The API server encountered an error. Please try again shortly.'
     }
     return `${fallback} (${err.response.status}).`
   }

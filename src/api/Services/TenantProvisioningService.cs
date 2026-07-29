@@ -7,7 +7,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Api.Services;
 
-public class TenantProvisioningService(AppDbContext db, PasswordHasher<User> passwordHasher)
+public class TenantProvisioningService(
+    AppDbContext db,
+    PasswordHasher<User> passwordHasher,
+    IAuditLogger auditLogger)
 {
     public async Task<(User Admin, Tenant Tenant)?> RegisterAsync(
         RegisterTenantRequest request,
@@ -87,6 +90,15 @@ public class TenantProvisioningService(AppDbContext db, PasswordHasher<User> pas
         db.Customers.Add(sampleCustomer);
         db.Subscriptions.Add(sampleSubscription);
         await db.SaveChangesAsync(cancellationToken);
+
+        await auditLogger.LogAsync(
+            AuditActions.AuthRegister,
+            nameof(Tenant),
+            tenant.Id,
+            tenantId,
+            admin.Id,
+            admin.Username,
+            cancellationToken);
 
         return (admin, tenant);
     }

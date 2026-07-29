@@ -77,3 +77,18 @@ Authorization: Bearer {{login.response.body.$.token}}
 ### Protected data — WITH Bearer token (expect 200, customers for current tenant only)
 GET {{baseUrl}}/api/data
 Authorization: Bearer {{login.response.body.$.token}}
+
+### --- Day 4 Step 3: Rate limiting ---
+### Rapid login attempts (auth policy: 10/min) — expect eventual 429
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "wrong-password"
+}
+
+#
+# Tip: repeat the request above >10 times within a minute from the same IP
+# to observe HTTP 429 with {"message":"Too many requests. Please try again later."}
+#

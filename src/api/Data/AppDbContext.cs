@@ -27,6 +27,8 @@ public class AppDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
 
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -91,6 +93,23 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasQueryFilter(u => !u.IsDeleted && u.TenantId == CurrentTenantId);
+        });
+
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+            entity.Property(a => a.Action).IsRequired().HasMaxLength(64);
+            entity.Property(a => a.EntityName).IsRequired().HasMaxLength(128);
+            entity.Property(a => a.Username).IsRequired().HasMaxLength(128);
+            entity.Property(a => a.IpAddress).HasMaxLength(64);
+            entity.HasIndex(a => new { a.TenantId, a.Timestamp });
+
+            entity.HasOne(a => a.Tenant)
+                .WithMany()
+                .HasForeignKey(a => a.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasQueryFilter(a => a.TenantId == CurrentTenantId);
         });
     }
 

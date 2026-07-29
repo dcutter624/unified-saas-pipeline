@@ -14,9 +14,13 @@ import {
   Typography,
 } from '@mui/material'
 import { getApiErrorMessage, useAuth } from '../auth/AuthContext'
+import { useAlert } from '../notifications/AlertProvider'
+import { useApiStatus } from '../notifications/ApiStatusProvider'
 
 export default function RegisterPage() {
   const { isAuthenticated, register } = useAuth()
+  const { notifySuccess } = useAlert()
+  const { isWarmingUp } = useApiStatus()
   const navigate = useNavigate()
 
   const [tenantName, setTenantName] = useState('')
@@ -56,6 +60,7 @@ export default function RegisterPage() {
         adminEmail: adminEmail.trim(),
         adminPassword,
       })
+      notifySuccess('Tenant registered successfully.')
       navigate('/', { replace: true })
     } catch (err) {
       setError(getApiErrorMessage(err, 'Registration failed'))
@@ -76,6 +81,12 @@ export default function RegisterPage() {
               Provision a new workspace and admin account
             </Typography>
           </Stack>
+
+          {isWarmingUp && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Warming up API server… this can take a moment on first contact.
+            </Alert>
+          )}
 
           {error && (
             <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -134,7 +145,11 @@ export default function RegisterPage() {
                 disabled={submitting}
                 startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : undefined}
               >
-                {submitting ? 'Creating tenant…' : 'Create tenant'}
+                {submitting
+                  ? isWarmingUp
+                    ? 'Connecting…'
+                    : 'Creating tenant…'
+                  : 'Create tenant'}
               </Button>
               <Typography variant="body2" color="text.secondary" textAlign="center">
                 Already have an account?{' '}

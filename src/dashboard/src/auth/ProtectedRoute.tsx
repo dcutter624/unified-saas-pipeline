@@ -28,7 +28,7 @@ export default function ProtectedRoute() {
         }
       })
       .catch(() => {
-        // 401/disabled handled by axios interceptor + AuthSessionBridge
+        // 401/disabled handled by axios interceptor + NotificationBridge
       })
       .finally(() => {
         if (!cancelled) {

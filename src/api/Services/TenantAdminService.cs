@@ -9,7 +9,8 @@ namespace Api.Services;
 public class TenantAdminService(
     AppDbContext db,
     ITenantService tenantService,
-    PasswordHasher<User> passwordHasher)
+    PasswordHasher<User> passwordHasher,
+    IAuditLogger auditLogger)
 {
     public async Task<TenantSettingsResponse?> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
@@ -54,6 +55,14 @@ public class TenantAdminService(
         }
 
         await db.SaveChangesAsync(cancellationToken);
+
+        await auditLogger.LogAsync(
+            AuditActions.TenantSettingsUpdate,
+            nameof(Tenant),
+            tenant.Id,
+            tenant.Id,
+            cancellationToken: cancellationToken);
+
         return ToSettingsResponse(tenant);
     }
 
@@ -118,6 +127,13 @@ public class TenantAdminService(
         db.Users.Add(user);
         await db.SaveChangesAsync(cancellationToken);
 
+        await auditLogger.LogAsync(
+            AuditActions.UserCreate,
+            nameof(User),
+            user.Id,
+            tenantId,
+            cancellationToken: cancellationToken);
+
         return (new TenantUserResponse(user.Id, user.Username, user.Email, user.Role, user.CreatedAt), null);
     }
 
@@ -141,6 +157,14 @@ public class TenantAdminService(
 
         tenant.Status = TenantStatuses.Allowed.First(s => s.Equals(status, StringComparison.OrdinalIgnoreCase));
         await db.SaveChangesAsync(cancellationToken);
+
+        await auditLogger.LogAsync(
+            AuditActions.TenantStatusUpdate,
+            nameof(Tenant),
+            tenant.Id,
+            tenant.Id,
+            cancellationToken: cancellationToken);
+
         return (ToSettingsResponse(tenant), null);
     }
 

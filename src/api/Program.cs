@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Serialization;
+using Api;
 using Api.Data;
 using Api.Dtos;
 using Api.Middleware;
@@ -7,6 +8,7 @@ using Api.Models;
 using Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -25,14 +27,11 @@ builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddSingleton<PasswordHasher<User>>();
 builder.Services.AddScoped<TenantProvisioningService>();
 builder.Services.AddScoped<TenantAdminService>();
+builder.Services.AddScoped<IAuditLogger, AuditLogger>();
+builder.Services.AddScoped<AuditLogQueryService>();
+builder.Services.AddScoped<AnalyticsService>();
 
-builder.Services.AddCors(options =>
-{
-    options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin()
-            .AllowAnyHeader()
-            .AllowAnyMethod());
-});
+builder.Services.AddApiSecurity(builder.Configuration);
 
 var jwtSecret = builder.Configuration["Jwt:Secret"]
     ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
@@ -69,7 +68,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 var app = builder.Build();
 
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseMiddleware<TenantStatusMiddleware>();
@@ -99,7 +100,8 @@ app.MapPost("/api/auth/login", async (
     LoginRequest request,
     AppDbContext db,
     JwtTokenService tokenService,
-    PasswordHasher<User> passwordHasher) =>
+    PasswordHasher<User> passwordHasher,
+    IAuditLogger auditLogger) =>
 {
     if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
     {
@@ -136,6 +138,14 @@ app.MapPost("/api/auth/login", async (
     // Login remains available for disabled tenants so Admins can reactivate via PATCH /api/tenant/status.
     var token = tokenService.CreateToken(user);
 
+    await auditLogger.LogAsync(
+        AuditActions.AuthLogin,
+        nameof(User),
+        user.Id,
+        user.TenantId,
+        user.Id,
+        user.Username);
+
     return Results.Ok(new
     {
         token,
@@ -145,7 +155,7 @@ app.MapPost("/api/auth/login", async (
             ? "Tenant account is disabled. Please contact support."
             : null
     });
-}).AllowAnonymous();
+}).AllowAnonymous().RequireRateLimiting("auth");
 
 app.MapPost("/api/auth/register", async (
     RegisterTenantRequest request,
@@ -174,7 +184,7 @@ app.MapPost("/api/auth/register", async (
     {
         return Results.BadRequest(new { message = ex.Message });
     }
-}).AllowAnonymous();
+}).AllowAnonymous().RequireRateLimiting("auth");
 
 app.MapPost("/api/seed", async (AppDbContext db, PasswordHasher<User> passwordHasher) =>
 {
@@ -249,6 +259,14 @@ app.MapGet("/api/metrics", async (AppDbContext db, ITenantService tenants) =>
     });
 }).RequireAuthorization();
 
+app.MapGet("/api/analytics/summary", async (
+    AnalyticsService analytics,
+    string? period) =>
+{
+    var summary = await analytics.GetSummaryAsync(period);
+    return Results.Ok(summary);
+}).RequireAuthorization();
+
 app.MapGet("/api/data", async (AppDbContext db, ITenantService tenants) =>
 {
     tenants.GetRequiredTenantId();
@@ -264,7 +282,8 @@ app.MapGet("/api/data", async (AppDbContext db, ITenantService tenants) =>
 app.MapPost("/api/data", async (
     CreateCustomerRequest request,
     AppDbContext db,
-    ITenantService tenants) =>
+    ITenantService tenants,
+    IAuditLogger auditLogger) =>
 {
     var tenantId = tenants.GetRequiredTenantId();
 
@@ -297,6 +316,12 @@ app.MapPost("/api/data", async (
     db.Subscriptions.Add(subscription);
     await db.SaveChangesAsync();
 
+    await auditLogger.LogAsync(
+        AuditActions.CustomerCreate,
+        nameof(Customer),
+        customer.Id,
+        tenantId);
+
     return Results.Created($"/api/data/{customer.Id}", new
     {
         customer.Id,
@@ -312,9 +337,10 @@ app.MapPatch("/api/subscriptions/{subscriptionId:guid}/status", async (
     Guid subscriptionId,
     UpdateTenantStatusRequest request,
     AppDbContext db,
-    ITenantService tenants) =>
+    ITenantService tenants,
+    IAuditLogger auditLogger) =>
 {
-    tenants.GetRequiredTenantId();
+    var tenantId = tenants.GetRequiredTenantId();
 
     var status = request.Status?.Trim() ?? string.Empty;
     if (string.IsNullOrWhiteSpace(status))
@@ -336,6 +362,13 @@ app.MapPatch("/api/subscriptions/{subscriptionId:guid}/status", async (
     }
 
     await db.SaveChangesAsync();
+
+    await auditLogger.LogAsync(
+        AuditActions.SubscriptionStatusUpdate,
+        nameof(Subscription),
+        subscription.Id,
+        tenantId);
+
     return Results.Ok(subscription);
 }).RequireAuthorization("AdminOnly");
 
@@ -384,6 +417,21 @@ tenantAdmin.MapPost("/users", async (CreateTenantUserRequest request, TenantAdmi
     }
 
     return Results.Created($"/api/tenant/users/{user!.Id}", user);
+});
+
+tenantAdmin.MapGet("/audit-logs", async (
+    AuditLogQueryService auditLogs,
+    int? page,
+    int? pageSize,
+    string? sortBy,
+    string? sortDir) =>
+{
+    var result = await auditLogs.GetPagedAsync(
+        page ?? 1,
+        pageSize ?? 25,
+        sortBy ?? "timestamp",
+        sortDir ?? "desc");
+    return Results.Ok(result);
 });
 
 app.Run();

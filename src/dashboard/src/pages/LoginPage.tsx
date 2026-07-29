@@ -14,9 +14,13 @@ import {
   Typography,
 } from '@mui/material'
 import { getApiErrorMessage, useAuth } from '../auth/AuthContext'
+import { useAlert } from '../notifications/AlertProvider'
+import { useApiStatus } from '../notifications/ApiStatusProvider'
 
 export default function LoginPage() {
   const { isAuthenticated, login, authNotice, clearAuthNotice } = useAuth()
+  const { notifySuccess } = useAlert()
+  const { isWarmingUp } = useApiStatus()
   const navigate = useNavigate()
 
   const [username, setUsername] = useState('')
@@ -53,6 +57,7 @@ export default function LoginPage() {
     setSubmitting(true)
     try {
       await login(username.trim(), password)
+      notifySuccess('Signed in successfully.')
       navigate('/', { replace: true })
     } catch (err) {
       setError(getApiErrorMessage(err, 'Login failed'))
@@ -73,6 +78,12 @@ export default function LoginPage() {
               Unified SaaS Dashboard
             </Typography>
           </Stack>
+
+          {isWarmingUp && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Warming up API server… this can take a moment on first contact.
+            </Alert>
+          )}
 
           {(authNotice || error) && (
             <Alert
@@ -121,7 +132,7 @@ export default function LoginPage() {
                 disabled={submitting}
                 startIcon={submitting ? <CircularProgress size={18} color="inherit" /> : undefined}
               >
-                {submitting ? 'Signing in…' : 'Sign in'}
+                {submitting ? (isWarmingUp ? 'Connecting…' : 'Signing in…') : 'Sign in'}
               </Button>
               <Typography variant="body2" color="text.secondary" textAlign="center">
                 New tenant?{' '}

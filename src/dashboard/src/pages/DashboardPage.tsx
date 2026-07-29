@@ -4,23 +4,23 @@ import {
   Container,
   Grid2 as Grid,
   Skeleton,
-  Snackbar,
   Typography,
 } from '@mui/material'
-import axios from 'axios'
 import {
   createCustomerRequest,
   updateSubscriptionStatusRequest,
 } from '../api/dashboardApi'
-import { useAuth } from '../auth/AuthContext'
+import { getApiErrorMessage, useAuth } from '../auth/AuthContext'
 import { AddCustomerDialog } from '../components/dashboard/AddCustomerDialog'
 import { CustomersDataGrid } from '../components/dashboard/CustomersDataGrid'
 import { MetricCards } from '../components/dashboard/MetricCards'
 import { SubscriptionPieChart } from '../components/dashboard/SubscriptionPieChart'
 import { useDashboardData, type DashboardRow } from '../hooks/useDashboardData'
+import { useAlert } from '../notifications/AlertProvider'
 
 export default function DashboardPage() {
   const { currentUser, tenantSettings } = useAuth()
+  const { notifySuccess, notifyError } = useAlert()
   const {
     dashboard,
     rows,
@@ -38,22 +38,18 @@ export default function DashboardPage() {
   const isAdmin = currentUser?.role === 'Admin'
   const [addOpen, setAddOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  const [snackMessage, setSnackMessage] = useState<string | null>(null)
 
   async function handleAddCustomer(payload: { name: string; email: string; tier: string }) {
     setSubmitting(true)
     try {
       await createCustomerRequest(payload)
       setAddOpen(false)
-      setSnackMessage('Customer created.')
+      notifySuccess('Customer added successfully.')
       refresh()
     } catch (err) {
-      const message = axios.isAxiosError(err)
-        ? (err.response?.data as { message?: string } | undefined)?.message ??
-          'Failed to create customer.'
-        : 'Failed to create customer.'
+      const message = getApiErrorMessage(err, 'Failed to create customer')
       setError(message)
-      setSnackMessage(message)
+      notifyError(message)
     } finally {
       setSubmitting(false)
     }
@@ -66,15 +62,12 @@ export default function DashboardPage() {
 
     try {
       await updateSubscriptionStatusRequest(row.subscriptionId, 'Inactive')
-      setSnackMessage(`${row.customerName} deactivated.`)
+      notifySuccess(`${row.customerName} deactivated.`)
       refresh()
     } catch (err) {
-      const message = axios.isAxiosError(err)
-        ? (err.response?.data as { message?: string } | undefined)?.message ??
-          'Failed to deactivate subscription.'
-        : 'Failed to deactivate subscription.'
+      const message = getApiErrorMessage(err, 'Failed to deactivate subscription')
       setError(message)
-      setSnackMessage(message)
+      notifyError(message)
     }
   }
 
@@ -144,14 +137,6 @@ export default function DashboardPage() {
         submitting={submitting}
         onClose={() => setAddOpen(false)}
         onSubmit={handleAddCustomer}
-      />
-
-      <Snackbar
-        open={Boolean(snackMessage)}
-        autoHideDuration={4000}
-        onClose={() => setSnackMessage(null)}
-        message={snackMessage ?? ''}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       />
     </Container>
   )

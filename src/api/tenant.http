@@ -144,3 +144,39 @@ Content-Type: application/json
 ### Dashboard after reactivation — expect 200
 GET {{baseUrl}}/api/dashboard
 Authorization: Bearer {{inactiveLogin.response.body.$.token}}
+
+### --- Day 4 Step 1: Audit logging ---
+
+### Admin creates a customer (audited) — expect 201
+# @name createCustomer
+POST {{baseUrl}}/api/data
+Authorization: Bearer {{inactiveLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "name": "Audit Demo Customer",
+  "email": "audit-demo@acme.com",
+  "tier": "Pro"
+}
+
+### Admin updates settings (audited) — expect 200
+PUT {{baseUrl}}/api/tenant/settings
+Authorization: Bearer {{inactiveLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "tenantName": "Acme Corporation",
+  "primaryColor": "#0B5FFF"
+}
+
+### GET audit logs as Admin — expect 200 paginated trail
+# @name adminAuditLogs
+GET {{baseUrl}}/api/tenant/audit-logs?page=1&pageSize=25&sortBy=timestamp&sortDir=desc
+Authorization: Bearer {{inactiveLogin.response.body.$.token}}
+
+### Non-Admin GET audit logs — expect 403 Forbidden
+GET {{baseUrl}}/api/tenant/audit-logs?page=1&pageSize=10
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### Unauthorized audit logs (no token) — expect 401
+GET {{baseUrl}}/api/tenant/audit-logs

@@ -1,0 +1,42 @@
+@baseUrl = http://localhost:5000
+
+### Login as seeded Admin (Acme)
+# @name adminLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "password"
+}
+
+### Analytics summary — default 6 months
+GET {{baseUrl}}/api/analytics/summary
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### Analytics summary — last 30 days (daily buckets)
+GET {{baseUrl}}/api/analytics/summary?period=30d
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### Analytics summary — last 12 months
+GET {{baseUrl}}/api/analytics/summary?period=12m
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### Unauthorized analytics — expect 401
+GET {{baseUrl}}/api/analytics/summary
+
+### Register a fresh tenant (near-zero historical data)
+# @name registerFresh
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "tenantName": "Analytics Empty Co",
+  "adminUsername": "analytics-empty-admin",
+  "adminEmail": "admin@analytics-empty.example",
+  "adminPassword": "Analytics123!"
+}
+
+### Fresh tenant analytics — expect zeroed KPIs + empty/zero series buckets
+GET {{baseUrl}}/api/analytics/summary?period=6m
+Authorization: Bearer {{registerFresh.response.body.$.token}}
