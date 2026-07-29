@@ -51,6 +51,10 @@ public class TenantProvisioningService(
             Name = tenantName,
             Slug = slug,
             Status = TenantStatuses.Active,
+            SubscriptionTier = SubscriptionTiers.Starter,
+            SubscriptionStatus = BillingSubscriptionStatuses.Active,
+            SubscriptionStatusChangedAt = DateTime.UtcNow,
+            CurrentPeriodEnd = DateTime.UtcNow.AddMonths(1),
             CreatedAt = DateTime.UtcNow
         };
 

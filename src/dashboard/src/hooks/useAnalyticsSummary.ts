@@ -33,7 +33,13 @@ export function useAnalyticsSummary(period: AnalyticsPeriod) {
         if (cancelled) {
           return
         }
-        if (axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403)) {
+        if (axios.isAxiosError(err) && err.response?.status === 401) {
+          return
+        }
+        if (axios.isAxiosError(err) && err.response?.status === 403) {
+          const apiMessage = (err.response.data as { message?: string } | undefined)?.message
+          setError(apiMessage ?? 'This analytics period requires a Pro plan or higher.')
+          setData(null)
           return
         }
         setError(

@@ -9,4 +9,5 @@ public static class AuditActions
     public const string CustomerCreate = "CUSTOMER_CREATE";
     public const string SubscriptionStatusUpdate = "SUBSCRIPTION_STATUS_UPDATE";
     public const string UserCreate = "USER_CREATE";
+    public const string BillingWebhook = "BILLING_WEBHOOK";
 }

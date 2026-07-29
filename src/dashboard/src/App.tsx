@@ -10,6 +10,7 @@ import ApiWarmup from './notifications/ApiWarmup'
 import NotificationBridge from './notifications/NotificationBridge'
 import AuditTrailPage from './pages/AuditTrailPage'
 import AnalyticsPage from './pages/AnalyticsPage'
+import BillingPage from './pages/BillingPage'
 import DashboardPage from './pages/DashboardPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -42,6 +43,7 @@ export default function App() {
                       <Route path="/analytics" element={<AnalyticsPage />} />
                       <Route element={<AdminRoute />}>
                         <Route path="/audit" element={<AuditTrailPage />} />
+                        <Route path="/billing" element={<BillingPage />} />
                       </Route>
                     </Route>
                   </Route>

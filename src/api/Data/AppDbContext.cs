@@ -29,6 +29,8 @@ public class AppDbContext : DbContext
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    public DbSet<MrrSnapshot> MrrSnapshots => Set<MrrSnapshot>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -39,6 +41,10 @@ public class AppDbContext : DbContext
             entity.Property(t => t.Name).IsRequired();
             entity.Property(t => t.Slug).IsRequired();
             entity.Property(t => t.Status).IsRequired();
+            entity.Property(t => t.SubscriptionTier).IsRequired().HasMaxLength(32);
+            entity.Property(t => t.SubscriptionStatus).IsRequired().HasMaxLength(32);
+            entity.Property(t => t.StripeCustomerId).HasMaxLength(128);
+            entity.Property(t => t.StripeSubscriptionId).HasMaxLength(128);
             entity.HasIndex(t => t.Slug).IsUnique();
             entity.HasQueryFilter(t =>
                 !t.IsDeleted && (CurrentTenantId == Guid.Empty || t.Id == CurrentTenantId));
@@ -110,6 +116,20 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasQueryFilter(a => a.TenantId == CurrentTenantId);
+        });
+
+        modelBuilder.Entity<MrrSnapshot>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.Property(s => s.Mrr).HasPrecision(18, 2);
+            entity.Property(s => s.SubscriptionTier).IsRequired().HasMaxLength(32);
+            entity.Property(s => s.BillingStatus).IsRequired().HasMaxLength(32);
+            entity.HasIndex(s => new { s.TenantId, s.SnapshotDate }).IsUnique();
+
+            entity.HasOne(s => s.Tenant)
+                .WithMany()
+                .HasForeignKey(s => s.TenantId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 

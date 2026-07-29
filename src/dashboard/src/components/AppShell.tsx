@@ -12,6 +12,7 @@ import {
 } from '@mui/material'
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import SystemStatusIndicator from './SystemStatusIndicator'
 
 interface AppShellProps {
   children: ReactNode
@@ -73,19 +74,34 @@ export default function AppShell({ children }: AppShellProps) {
             Analytics
           </Button>
           {isAdmin && (
-            <Button
-              color="inherit"
-              component={RouterLink}
-              to="/audit"
-              sx={{
-                opacity: location.pathname.startsWith('/audit') ? 1 : 0.8,
-                textDecoration: location.pathname.startsWith('/audit') ? 'underline' : 'none',
-                textUnderlineOffset: 6,
-              }}
-            >
-              Audit Trail
-            </Button>
+            <>
+              <Button
+                color="inherit"
+                component={RouterLink}
+                to="/audit"
+                sx={{
+                  opacity: location.pathname.startsWith('/audit') ? 1 : 0.8,
+                  textDecoration: location.pathname.startsWith('/audit') ? 'underline' : 'none',
+                  textUnderlineOffset: 6,
+                }}
+              >
+                Audit Trail
+              </Button>
+              <Button
+                color="inherit"
+                component={RouterLink}
+                to="/billing"
+                sx={{
+                  opacity: location.pathname.startsWith('/billing') ? 1 : 0.8,
+                  textDecoration: location.pathname.startsWith('/billing') ? 'underline' : 'none',
+                  textUnderlineOffset: 6,
+                }}
+              >
+                Billing
+              </Button>
+            </>
           )}
+          {isAdmin && <SystemStatusIndicator />}
           {currentUser && (
             <Typography
               variant="body2"

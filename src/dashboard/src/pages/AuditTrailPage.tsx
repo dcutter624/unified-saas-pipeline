@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -10,9 +10,14 @@ import {
   Typography,
 } from '@mui/material'
 import { DataGrid, GridToolbar, type GridColDef } from '@mui/x-data-grid'
+import FileDownloadIcon from '@mui/icons-material/FileDownload'
 import RefreshIcon from '@mui/icons-material/Refresh'
+import { Link as RouterLink } from 'react-router-dom'
+import { exportAuditLogsCsv } from '../api/billingApi'
 import type { AuditLogItem } from '../api/auditApi'
+import { getApiErrorMessage } from '../auth/AuthContext'
 import { useAuditLogs } from '../hooks/useAuditLogs'
+import { useAlert } from '../notifications/AlertProvider'
 
 function actionChipColor(
   action: string,
@@ -44,6 +49,8 @@ function actionLabel(action: string): string {
 }
 
 export default function AuditTrailPage() {
+  const { notifySuccess, notifyError } = useAlert()
+  const [exporting, setExporting] = useState(false)
   const {
     rows,
     loading,
@@ -121,6 +128,24 @@ export default function AuditTrailPage() {
     [],
   )
 
+  async function handleExportCsv() {
+    setExporting(true)
+    try {
+      const blob = await exportAuditLogsCsv()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`
+      anchor.click()
+      URL.revokeObjectURL(url)
+      notifySuccess('Audit CSV exported.')
+    } catch (err) {
+      notifyError(getApiErrorMessage(err, 'CSV export requires Pro or higher'))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
       <Stack
@@ -138,9 +163,26 @@ export default function AuditTrailPage() {
             Tenant-scoped history of authentication and data changes
           </Typography>
         </Box>
-        <Button startIcon={<RefreshIcon />} onClick={refresh} disabled={loading}>
-          Refresh
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button
+            startIcon={<FileDownloadIcon />}
+            onClick={() => void handleExportCsv()}
+            disabled={loading || exporting}
+          >
+            {exporting ? 'Exporting…' : 'Export CSV'}
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/billing"
+            size="small"
+            sx={{ display: { xs: 'none', md: 'inline-flex' } }}
+          >
+            Plans
+          </Button>
+          <Button startIcon={<RefreshIcon />} onClick={refresh} disabled={loading}>
+            Refresh
+          </Button>
+        </Stack>
       </Stack>
 
       {error && (

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 import {
   Alert,
   Box,
@@ -98,7 +99,18 @@ export default function AnalyticsPage() {
       <AnalyticsKpiCards loading={showSkeleton} kpis={data?.kpis ?? null} />
 
       {error && (
-        <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setError(null)}>
+        <Alert
+          severity="warning"
+          sx={{ mb: 3 }}
+          onClose={() => setError(null)}
+          action={
+            error.toLowerCase().includes('tier') || error.toLowerCase().includes('pro') ? (
+              <Button color="inherit" size="small" component={RouterLink} to="/billing">
+                Upgrade
+              </Button>
+            ) : undefined
+          }
+        >
           {error}
         </Alert>
       )}

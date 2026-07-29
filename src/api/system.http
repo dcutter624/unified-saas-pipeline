@@ -1,0 +1,51 @@
+@baseUrl = http://localhost:5000
+@systemApiKey = local-dev-system-key
+
+### Deep health check — expect 200 Healthy JSON
+GET {{baseUrl}}/healthz
+
+### Login as seeded Admin
+# @name adminLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "password"
+}
+
+### Trigger maintenance as Admin — expect snapshotsRecorded / purgedRecords / suspendedTenants
+POST {{baseUrl}}/api/admin/system/trigger-maintenance
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### Health after maintenance — worker lastSuccess should be recent
+GET {{baseUrl}}/healthz
+
+### Trigger maintenance with system API key (no JWT)
+POST {{baseUrl}}/api/admin/system/trigger-maintenance
+X-System-Api-Key: {{systemApiKey}}
+
+### Trigger again immediately — may return 409 if still overlapping, or 200 with snapshotsRecorded=0
+POST {{baseUrl}}/api/admin/system/trigger-maintenance
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### Unauthorized trigger — expect 401
+POST {{baseUrl}}/api/admin/system/trigger-maintenance
+
+### Simulate PastDue webhook (grace testing)
+POST {{baseUrl}}/api/billing/webhook
+Content-Type: application/json
+
+{
+  "type": "invoice.payment_failed",
+  "data": {
+    "object": {
+      "id": "in_failed_1",
+      "customer": "cus_mock_acme",
+      "subscription": "sub_mock_acme",
+      "metadata": {
+        "tenant_id": "{{adminLogin.response.body.$.tenantId}}"
+      }
+    }
+  }
+}

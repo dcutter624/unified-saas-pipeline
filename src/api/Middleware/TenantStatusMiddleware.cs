@@ -52,7 +52,10 @@ public class TenantStatusMiddleware(RequestDelegate next)
 
         if (path.Equals("/", StringComparison.OrdinalIgnoreCase)
             || path.StartsWith("/api/auth", StringComparison.OrdinalIgnoreCase)
-            || path.StartsWith("/api/seed", StringComparison.OrdinalIgnoreCase))
+            || path.StartsWith("/api/seed", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/api/billing/webhook", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/api/admin/system/trigger-maintenance", StringComparison.OrdinalIgnoreCase)
+            || path.Equals("/healthz", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

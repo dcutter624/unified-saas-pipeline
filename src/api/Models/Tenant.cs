@@ -10,6 +10,21 @@ public class Tenant
 
     public string Status { get; set; } = TenantStatuses.Active;
 
+    public string SubscriptionTier { get; set; } = SubscriptionTiers.Starter;
+
+    public string SubscriptionStatus { get; set; } = BillingSubscriptionStatuses.Active;
+
+    /// <summary>
+    /// When SubscriptionStatus last changed (used for PastDue grace enforcement).
+    /// </summary>
+    public DateTime? SubscriptionStatusChangedAt { get; set; }
+
+    public string? StripeCustomerId { get; set; }
+
+    public string? StripeSubscriptionId { get; set; }
+
+    public DateTime? CurrentPeriodEnd { get; set; }
+
     public string? PrimaryColor { get; set; }
 
     public string? LogoUrl { get; set; }

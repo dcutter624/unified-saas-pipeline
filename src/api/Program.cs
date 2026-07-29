@@ -6,10 +6,12 @@ using Api.Dtos;
 using Api.Middleware;
 using Api.Models;
 using Api.Services;
+using Api.Workers;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,6 +32,13 @@ builder.Services.AddScoped<TenantAdminService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddScoped<AuditLogQueryService>();
 builder.Services.AddScoped<AnalyticsService>();
+builder.Services.AddScoped<BillingService>();
+builder.Services.Configure<MaintenanceOptions>(
+    builder.Configuration.GetSection(MaintenanceOptions.SectionName));
+builder.Services.AddSingleton<IMaintenanceHealthState, MaintenanceHealthState>();
+builder.Services.AddScoped<TenantMaintenanceService>();
+builder.Services.AddScoped<HealthDiagnosticsService>();
+builder.Services.AddHostedService<TenantMaintenanceBackgroundService>();
 
 builder.Services.AddApiSecurity(builder.Configuration);
 
@@ -95,6 +104,14 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.MapGet("/", () => "Unified SaaS Pipeline API").AllowAnonymous();
+
+app.MapGet("/healthz", async (HealthDiagnosticsService health, CancellationToken cancellationToken) =>
+{
+    var (response, healthy) = await health.CheckAsync(cancellationToken);
+    return healthy
+        ? Results.Ok(response)
+        : Results.Json(response, statusCode: StatusCodes.Status503ServiceUnavailable);
+}).AllowAnonymous().DisableRateLimiting();
 
 app.MapPost("/api/auth/login", async (
     LoginRequest request,
@@ -261,11 +278,58 @@ app.MapGet("/api/metrics", async (AppDbContext db, ITenantService tenants) =>
 
 app.MapGet("/api/analytics/summary", async (
     AnalyticsService analytics,
+    BillingService billing,
     string? period) =>
 {
+    var normalized = (period ?? "6m").Trim().ToLowerInvariant();
+    if (normalized is "12m" or "1y" or "year")
+    {
+        var denied = await billing.EnsureFeatureAsync(TenantFeatures.AdvancedAnalytics);
+        if (denied is not null)
+        {
+            return denied;
+        }
+    }
+
     var summary = await analytics.GetSummaryAsync(period);
     return Results.Ok(summary);
 }).RequireAuthorization();
+
+var billingApi = app.MapGroup("/api/billing");
+
+billingApi.MapGet("/subscription", async (BillingService billing) =>
+{
+    var subscription = await billing.GetSubscriptionAsync();
+    return subscription is null ? Results.NotFound() : Results.Ok(subscription);
+}).RequireAuthorization("AdminOnly");
+
+billingApi.MapPost("/checkout-session", async (
+    CreateCheckoutSessionRequest request,
+    BillingService billing) =>
+{
+    var (session, error) = await billing.CreateCheckoutSessionAsync(request);
+    if (error is not null)
+    {
+        return error == "Tenant not found."
+            ? Results.NotFound(new { message = error })
+            : Results.BadRequest(new { message = error });
+    }
+
+    return Results.Ok(session);
+}).RequireAuthorization("AdminOnly");
+
+billingApi.MapPost("/webhook", async (
+    StripeWebhookRequest request,
+    BillingService billing) =>
+{
+    var (subscription, error) = await billing.HandleWebhookAsync(request);
+    if (error is not null)
+    {
+        return Results.BadRequest(new { message = error });
+    }
+
+    return Results.Ok(subscription);
+}).AllowAnonymous();
 
 app.MapGet("/api/data", async (AppDbContext db, ITenantService tenants) =>
 {
@@ -434,6 +498,56 @@ tenantAdmin.MapGet("/audit-logs", async (
     return Results.Ok(result);
 });
 
+tenantAdmin.MapGet("/audit-logs/export", async (BillingService billing) =>
+{
+    var denied = await billing.EnsureFeatureAsync(TenantFeatures.AuditCsvExport);
+    if (denied is not null)
+    {
+        return denied;
+    }
+
+    var csv = await billing.ExportAuditCsvAsync();
+    return Results.Text(csv ?? string.Empty, "text/csv");
+});
+
+app.MapPost("/api/admin/system/trigger-maintenance", async (
+    HttpContext httpContext,
+    TenantMaintenanceService maintenance,
+    IMaintenanceHealthState healthState,
+    IOptions<MaintenanceOptions> maintenanceOptions) =>
+{
+    var configuredKey = maintenanceOptions.Value.SystemApiKey;
+    var providedKey = httpContext.Request.Headers["X-System-Api-Key"].FirstOrDefault();
+    var hasValidSystemKey = !string.IsNullOrWhiteSpace(configuredKey)
+        && string.Equals(providedKey, configuredKey, StringComparison.Ordinal);
+    var isAdmin = httpContext.User.Identity?.IsAuthenticated == true
+        && httpContext.User.IsInRole(UserRoles.Admin);
+
+    if (!isAdmin && !hasValidSystemKey)
+    {
+        return Results.Unauthorized();
+    }
+
+    var trigger = hasValidSystemKey && !isAdmin ? "system-api-key" : "admin";
+    healthState.MarkAttempt(trigger);
+    try
+    {
+        var result = await maintenance.RunAsync(trigger, httpContext.RequestAborted);
+        healthState.MarkSuccess(trigger);
+        return Results.Ok(result);
+    }
+    catch (InvalidOperationException ex)
+    {
+        healthState.MarkFailure(trigger, ex);
+        return Results.Conflict(new { message = ex.Message });
+    }
+    catch (Exception ex)
+    {
+        healthState.MarkFailure(trigger, ex);
+        throw;
+    }
+}).AllowAnonymous();
+
 app.Run();
 
 static async Task<IResult> GetTenantsAsync(AppDbContext db, ITenantService tenants)
@@ -461,6 +575,12 @@ static async Task SeedDatabaseAsync(AppDbContext db, PasswordHasher<User> passwo
         Name = "Acme Corp",
         Slug = "acme-corp",
         Status = TenantStatuses.Active,
+        SubscriptionTier = SubscriptionTiers.Pro,
+        SubscriptionStatus = BillingSubscriptionStatuses.Active,
+        SubscriptionStatusChangedAt = DateTime.UtcNow,
+        StripeCustomerId = "cus_mock_acme",
+        StripeSubscriptionId = "sub_mock_acme",
+        CurrentPeriodEnd = DateTime.UtcNow.AddMonths(1),
         CreatedAt = DateTime.UtcNow
     };
 

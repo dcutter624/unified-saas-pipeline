@@ -1,0 +1,109 @@
+@baseUrl = http://localhost:5000
+
+### Login as seeded Admin (Acme — Pro plan)
+# @name adminLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "password"
+}
+
+### GET current billing subscription (Admin) — expect Pro + feature flags
+GET {{baseUrl}}/api/billing/subscription
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### POST mock checkout session to upgrade to Enterprise
+# @name checkout
+POST {{baseUrl}}/api/billing/checkout-session
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "tier": "Enterprise",
+  "successUrl": "http://localhost:5173/billing",
+  "cancelUrl": "http://localhost:5173/billing"
+}
+
+### Simulate Stripe invoice.payment_succeeded webhook
+POST {{baseUrl}}/api/billing/webhook
+Content-Type: application/json
+
+{
+  "type": "invoice.payment_succeeded",
+  "data": {
+    "object": {
+      "id": "in_mock_1",
+      "customer": "cus_mock_acme",
+      "subscription": "sub_mock_enterprise",
+      "status": "paid",
+      "currentPeriodEnd": 1893456000,
+      "metadata": {
+        "tenant_id": "{{adminLogin.response.body.$.tenantId}}",
+        "tier": "Enterprise"
+      }
+    }
+  }
+}
+
+### Confirm subscription is now Enterprise
+GET {{baseUrl}}/api/billing/subscription
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### Advanced analytics (12m) — allowed on Pro/Enterprise
+GET {{baseUrl}}/api/analytics/summary?period=12m
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### Audit CSV export — allowed on Pro/Enterprise
+GET {{baseUrl}}/api/tenant/audit-logs/export
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### Simulate subscription canceled → drops to Starter
+POST {{baseUrl}}/api/billing/webhook
+Content-Type: application/json
+
+{
+  "type": "customer.subscription.deleted",
+  "data": {
+    "object": {
+      "id": "sub_mock_enterprise",
+      "customer": "cus_mock_acme",
+      "subscription": "sub_mock_enterprise",
+      "metadata": {
+        "tenant_id": "{{adminLogin.response.body.$.tenantId}}"
+      }
+    }
+  }
+}
+
+### Advanced analytics after cancel — expect 403 feature gate
+GET {{baseUrl}}/api/analytics/summary?period=12m
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### Non-Admin cannot read billing — create analyst then expect 403
+# @name createAnalyst
+POST {{baseUrl}}/api/tenant/users
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "username": "billing-analyst",
+  "email": "billing-analyst@acme.com",
+  "password": "Analyst123!",
+  "role": "User"
+}
+
+###
+# @name analystLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "billing-analyst",
+  "password": "Analyst123!"
+}
+
+###
+GET {{baseUrl}}/api/billing/subscription
+Authorization: Bearer {{analystLogin.response.body.$.token}}
